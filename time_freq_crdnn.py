@@ -73,6 +73,7 @@ class TimeFreqCRDNN(sb.nnet.containers.Sequential):
                 activation=activation,
                 dropout=dropout,
                 causal=not rnn_bidirectional,
+                downsample=True,
                 layer_name=f"block_{block_index}",
             )
 
@@ -159,7 +160,9 @@ class Conv1d_2d(torch.nn.Module):
     def __init__(
         self, input_shape, channels, kernel_size=3, stride=1, causal=False
     ):
+        super().__init__()
         self.causal = causal
+        self.kernel_size = kernel_size
         if len(input_shape) == 3:
             self.unsqueeze = True
             in_channels = 1
@@ -167,21 +170,18 @@ class Conv1d_2d(torch.nn.Module):
             self.unsqueeze = False
             in_channels = input_shape[-1]
 
-        # Use half the channels for time convolution
-        self.out_channels = channels // 2
         self.time_conv = sb.nnet.CNN.Conv2d(
             in_channels=in_channels,
-            out_channels=self.out_channels,
-            kernel_size=(kernel_size, 1),
+            out_channels=channels,
+            kernel_size=(1, kernel_size),
             stride=stride,
             padding="valid" if causal else "same",
         )
 
-        # And half for freq convolution
         self.freq_conv = sb.nnet.CNN.Conv2d(
             in_channels=in_channels,
-            out_channels=self.out_channels,
-            kernel_size=(1, kernel_size),
+            out_channels=channels,
+            kernel_size=(kernel_size, 1),
             stride=stride,
             padding="same",
         )
@@ -197,13 +197,13 @@ class Conv1d_2d(torch.nn.Module):
 
         # Manage causal padding when necessary
         if self.causal:
-            pad = (self.kernel_size - 1, 0, 0, 0, 0, 0)
+            pad = (0, 0, 0, 0, self.kernel_size - 1, 0)
             x = torch.nn.functional.pad(x, pad)
 
         time_out = self.time_conv(x)
 
         # Combine time + freq maps
-        return torch.cat([freq_out, time_out], dim=-1)
+        return time_out + freq_out
 
 
 class DNN_Block(sb.nnet.containers.Sequential):

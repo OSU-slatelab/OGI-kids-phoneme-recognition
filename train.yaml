@@ -5,7 +5,7 @@
 # ################################
 
 # Seed needs to be set at top of yaml, before objects with parameters are made
-seed: 1234
+seed: 1245
 __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 output_folder: !ref results/<seed>
 test_stats_file: !ref <output_folder>/test_stats.txt
@@ -30,7 +30,6 @@ sample_rate: 16000
 n_fft: 400
 n_mels: 40
 output_neurons: 40
-reduction_factor: 4
 
 epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>
@@ -46,17 +45,15 @@ compute_features: !new:speechbrain.lobes.features.Fbank
     n_fft: !ref <n_fft>
     n_mels: !ref <n_mels>
 
-time_reduce: !new:projection_rnn.TimeReduction
-    factor: !ref <reduction_factor>
-
-recognizer: !new:projection_rnn.ProjectionRNN
-    input_size: !ref <n_mels> * <reduction_factor>
-    layers: 2
-    rnn_size: 1024
-    projection_size: 320
+recognizer: !new:time_freq_crdnn.TimeFreqCRDNN
+    input_size: !ref <n_mels>
+    cnn_channels: [64, 128]
+    rnn_neurons: 512
+    rnn_bidirectional: False
+    dnn_neurons: 256
 
 recognizer_output: !new:speechbrain.nnet.linear.Linear
-    input_size: !ref <recognizer[rnn_size]>
+    input_size: !ref <recognizer[dnn_neurons]>
     n_neurons: !ref <output_neurons>
     bias: True
 

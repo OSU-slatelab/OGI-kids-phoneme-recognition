@@ -26,7 +26,6 @@ class ASR(sb.core.Brain):
             wavs = self.hparams.augmentation(wavs, wav_lens)
 
         feats = self.hparams.compute_features(wavs)
-        feats = self.hparams.time_reduce(feats)
         feats = self.hparams.normalize(feats, wav_lens)
         out = self.modules.recognizer(feats)
         out = self.modules.recognizer_output(out)
