@@ -93,7 +93,8 @@ class ASR(sb.core.Brain):
 def dataio_prep(hparams):
     """Creates datasets and loading pipelines"""
 
-    encoder = sb.dataio.encoder.CTCTextEncoder(blank_label="<blank>")
+    encoder = sb.dataio.encoder.CTCTextEncoder()
+    encoder.add_blank()
 
     @sb.utils.data_pipeline.takes("wav")
     @sb.utils.data_pipeline.provides("sig")
@@ -117,7 +118,12 @@ def dataio_prep(hparams):
             output_keys=["id", "sig", "tokens"],
         ).filtered_sorted(sort_key="length")
 
-    encoder.update_from_didataset(data["train"], output_key="tokens_list")
+    encoder.load_or_create(
+        hparams["encoder_save_file"],
+        from_didatasets=[data["train"]],
+        output_key="tokens_list",
+        sequence_input=True,
+    )
 
     return data, encoder
 

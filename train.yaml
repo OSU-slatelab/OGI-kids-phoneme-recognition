@@ -11,6 +11,7 @@ output_folder: !ref results/<seed>
 test_stats_file: !ref <output_folder>/test_stats.txt
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
+encoder_save_file: ./encoder.txt
 
 # Data files
 data_folder: !PLACEHOLDER
@@ -48,9 +49,10 @@ compute_features: !new:speechbrain.lobes.features.Fbank
 recognizer: !new:time_freq_crdnn.TimeFreqCRDNN
     input_size: !ref <n_mels>
     cnn_channels: [64, 128]
-    rnn_neurons: 512
-    rnn_bidirectional: False
+    rnn_neurons: 256
+    rnn_bidirectional: True
     dnn_neurons: 256
+    dropout: 0.2
 
 recognizer_output: !new:speechbrain.nnet.linear.Linear
     input_size: !ref <recognizer[dnn_neurons]>

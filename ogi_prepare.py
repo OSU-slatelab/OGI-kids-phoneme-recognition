@@ -173,7 +173,7 @@ def create_json(wav_lst, json_file, id2word, id2verify):
         phonemes = words2phonemes(words)
 
         # Don't use bad quality recordings
-        if id2verify.get(snt_id, 1) == 3:
+        if snt_id not in id2verify or id2verify[snt_id] == 3:
             continue
 
         # Reading the signal (to retrieve duration in seconds)
