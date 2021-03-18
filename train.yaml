@@ -23,6 +23,7 @@ test_annotation: ./test.json
 number_of_epochs: 50
 batch_size: 16
 learning_rate: 0.0001
+alignment_weight: 0.0
 dataloader_opts:
     batch_size: !ref <batch_size>
 

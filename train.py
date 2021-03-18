@@ -28,35 +28,95 @@ class ASR(sb.core.Brain):
         feats = self.hparams.compute_features(wavs)
         feats = self.hparams.normalize(feats, wav_lens)
         out = self.modules.recognizer(feats)
-        out = self.modules.recognizer_output(out)
-        logprobs = self.hparams.log_softmax(out)
+        logits = self.modules.recognizer_output(out)
 
-        return logprobs
+        return logits
 
-    def compute_objectives(self, predictions, batch, stage):
+    def compute_objectives(self, logits, batch, stage):
         wavs, wav_lens = batch.sig
         phonemes, phoneme_lens = batch.tokens
+        log_probs = self.hparams.log_softmax(logits)
 
+        # Record phoneme error rate
         if stage != sb.Stage.TRAIN:
-            decoded = sb.decoders.ctc_greedy_decode(
-                predictions, wav_lens, blank_id=self.encoder.get_blank_index()
+            predicted_phonemes = sb.decoders.ctc_greedy_decode(
+                log_probs, wav_lens, blank_id=self.encoder.get_blank_index()
             )
             self.per_metrics.append(
                 ids=batch.id,
-                predict=decoded,
+                predict=predicted_phonemes,
                 target=phonemes,
                 target_len=phoneme_lens,
                 ind2lab=self.encoder.decode_ndim,
             )
 
-        ctc_loss = sb.nnet.losses.ctc_loss(
-            log_probs=predictions,
+        # Compute CTC loss
+        loss = sb.nnet.losses.ctc_loss(
+            log_probs=log_probs,
             targets=phonemes,
             input_lens=wav_lens,
             target_lens=phoneme_lens,
             blank_index=self.encoder.get_blank_index(),
         )
-        return ctc_loss
+
+        # Add alignment loss if requested
+        if self.hparams.alignment_weight > 0:
+            feats = self.hparams.compute_features(wavs)
+            alignment_loss = self.alignment_loss(logits, feats, wav_lens)
+            loss += self.hparams.alignment_weight * alignment_loss
+
+        return loss
+    
+    def alignment_loss(self, logits, feats, lengths):
+        """Computes the alignment loss between logits and features.
+
+        Arguments
+        ---------
+        logits : torch.tensor
+            Prediction model outputs pre-softmax.
+        feats : torch.tensor
+            The input features (fbanks, etc.) to compute energy.
+        lengths : torch.tensor
+            1-dimensional tensor with the relative lengths of utterances.
+        """
+
+        # Compute reduction factor
+        factor = round(feats.size(1) / logits.size(1))
+
+        # Pad feats to be divisible by reduction factor
+        if logits.size(1) * factor != feats.size(1):
+            padding = logits.size(1) * factor - feats.size(1)
+            feats = torch.nn.functional.pad(feats, (0, 0, 0, padding))
+
+        # reshape feats to have same length as logits, sum freqs to get energy
+        N, T, F = feats.shape
+        energies = feats.reshape(N, T // factor, F * factor).sum(dim=-1)
+
+        # Compute average energy per utterance
+        avg_energies = energies.sum(dim=1, keepdim=True)
+        avg_energies /= lengths.unsqueeze(1) * energies.size(1)
+
+        # Factor to multiply energy score by (for all but blank id)
+        # Each frame is 0 if energy is low, resulting in no loss penalty
+        factor = (energies > avg_energies).int()
+
+        # Expand factor to each posterior unit, so we can flip for blank index
+        factor = factor.unsqueeze(-1).repeat(1, 1, logits.size(-1))
+
+        # Flip factor for blank index 0 => 1 and 1 => 0
+        factor[:, :, self.encoder.get_blank_index()] *= -1
+        factor[:, :, self.encoder.get_blank_index()] += 1
+
+        # Reduce probabilities to a single value (blank or non-blank)
+        probability = torch.softmax(logits, dim=-1)
+        probability = torch.sum(probability * factor, dim=-1)
+
+        # Use the log of the probability as the cost
+        def cost(ignored, probability):
+            return -torch.log(probability)
+
+        # Only apply cost to frames within the utterance
+        return sb.nnet.losses.compute_masked_loss(cost, None, probability, lengths)
 
     def on_stage_start(self, stage, epoch):
         if stage != sb.Stage.TRAIN:
