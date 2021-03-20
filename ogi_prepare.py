@@ -140,7 +140,7 @@ def load_id2verify_map(data_folder, grades):
 
 def words2phonemes(word):
     "Convert all words to phonemes"
-    return " ".join(p.strip("012") for p in G2P(word) if p not in NOT_PHONEMES)
+    return ".".join(p.strip("012") for p in G2P(word) if p not in NOT_PHONEMES)
 
 
 def create_json(wav_lst, json_file, id2word, id2verify):
@@ -170,7 +170,7 @@ def create_json(wav_lst, json_file, id2word, id2verify):
         snt_id = wav_file[-12:-4]
         word_id = wav_file[-7:-5].upper()
         words = id2word[word_id]
-        phonemes = words2phonemes(words)
+        phonemes = " ".join(words2phonemes(word) for word in words.split())
 
         # Don't use bad quality recordings
         if snt_id not in id2verify or id2verify[snt_id] == 3:

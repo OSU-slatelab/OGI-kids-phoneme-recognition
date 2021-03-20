@@ -5,13 +5,15 @@
 # ################################
 
 # Seed needs to be set at top of yaml, before objects with parameters are made
-seed: 1245
+seed: 18
 __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 output_folder: !ref results/<seed>
 test_stats_file: !ref <output_folder>/test_stats.txt
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
 encoder_save_file: ./encoder.txt
+alignment_file: alignment.json
+valid_alignment_file: alignment_valid.json
 
 # Data files
 data_folder: !PLACEHOLDER

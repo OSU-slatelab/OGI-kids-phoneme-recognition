@@ -164,7 +164,8 @@ def dataio_prep(hparams):
     @sb.utils.data_pipeline.takes("phonemes")
     @sb.utils.data_pipeline.provides("tokens_list", "tokens")
     def text_pipeline(phonemes):
-        tokens_list = phonemes.strip().split()
+        words = phonemes.strip().split()
+        tokens_list = [p for word in words for p in word.split(".")]
         yield tokens_list
         tokens = encoder.encode_sequence(tokens_list)
         yield torch.LongTensor(tokens)
