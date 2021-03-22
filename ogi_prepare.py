@@ -18,6 +18,7 @@ G2P = G2p()
 NOT_PHONEMES = [" ", ".", "!", "?"]
 logger = logging.getLogger(__name__)
 SAMPLERATE = 16000
+GRADE_LIST = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]
 
 
 def prepare_ogi(
@@ -52,13 +53,12 @@ def prepare_ogi(
     logger.debug("Creating json files for the OGI Dataset...")
 
     speech_dir = os.path.join(data_folder, "speech", "scripted")
-    grade_list = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]
 
     # Creating json file for training data
     wav_lst_train = []
     wav_lst_valid = []
     wav_lst_test = []
-    for grade in grade_list:
+    for grade in GRADE_LIST:
         grade_dir = os.path.join(speech_dir, grade)
 
         # Collect list of folders for distinct speakers
@@ -81,7 +81,7 @@ def prepare_ogi(
 
     # Create data maps
     id2word = load_id2word_map(data_folder)
-    id2verify = load_id2verify_map(data_folder, grade_list)
+    id2verify = load_id2verify_map(data_folder)
 
     # Create json with all files
     create_json(wav_lst_train, train_file, id2word, id2verify)
@@ -126,9 +126,9 @@ def load_id2word_map(data_folder):
     return id2word
 
 
-def load_id2verify_map(data_folder, grades):
+def load_id2verify_map(data_folder):
     id2verify = {}
-    for grade in grades:
+    for grade in GRADE_LIST:
         verify_file = os.path.join(data_folder, "docs", grade + "-verified.txt")
         for line in open(verify_file):
             filename, verify = line.split()
@@ -143,7 +143,7 @@ def words2phonemes(word):
     return ".".join(p.strip("012") for p in G2P(word) if p not in NOT_PHONEMES)
 
 
-def create_json(wav_lst, json_file, id2word, id2verify):
+def create_json(wav_lst, json_file, id2word, id2verify, alignments=None):
     """
     Creates the json file given a list of wav files.
 
@@ -187,8 +187,68 @@ def create_json(wav_lst, json_file, id2word, id2verify):
             "phonemes": phonemes,
         }
 
+        if alignments is not None:
+            json_dict[snt_id].update(alignments[snt_id])
+
     # Writing the json lines
     with open(json_file, mode="w") as json_f:
         json.dump(json_dict, json_f, indent=2)
 
     logger.debug(f"{json_file} successfully created!")
+
+
+def prepare_aligned_ogi(
+    data_folder, train_file, valid_file, train_align_file, valid_align_file,
+):
+    """
+    Prepares the json files for the CSLU dataset.
+
+    Arguments
+    ---------
+    data_folder : str
+        Path to the folder where the original CSLU dataset is stored.
+    train_file : str
+        Path for storing the train data manifest file.
+    valid_file : str
+        Path for storing the validation data manifest file.
+    train_align_file : str
+        Path for file containing the alignments for training data.
+    valid_align_file : str
+        Path for file containing the alignments for validation data.
+    """
+    # Setting file extension.
+    extension = [".wav"]
+
+    # Check if this phase is already done (if so, skip it)
+    if skip(train_file, valid_file):
+        logger.debug("Skipping preparation, completed in previous run.")
+        return
+
+    logger.debug("Creating json files for the OGI Dataset...")
+
+    # Load train and validation alignments
+    with open(train_align_file) as f:
+        train_alignments = json.load(f)
+    with open(valid_align_file) as f:
+        valid_alignments = json.load(f)
+
+    speech_dir = os.path.join(data_folder, "speech", "scripted")
+
+    wav_lst_train = []
+    wav_lst_valid = []
+    full_wav_lst = get_all_files(speech_dir, match_and=extension)
+    for wav_file in full_wav_lst:
+        snt_id = wav_file[-12:-4]
+        if snt_id in train_alignments:
+            wav_lst_train.append(wav_file)
+        elif snt_id in valid_alignments:
+            wav_lst_valid.append(wav_file)
+
+
+    # Create data maps
+    id2word = load_id2word_map(data_folder)
+    id2verify = load_id2verify_map(data_folder)
+
+    # Create json with all files
+    create_json(wav_lst_train, train_file, id2word, id2verify, train_alignments)
+    create_json(wav_lst_valid, valid_file, id2word, id2verify, valid_alignments)

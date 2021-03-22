@@ -2,3 +2,4 @@ __pycache__
 *.sw*
 results
 *.json
+model_checkpoints
