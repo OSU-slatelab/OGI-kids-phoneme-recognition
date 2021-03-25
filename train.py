@@ -35,7 +35,7 @@ class ASR(sb.core.Brain):
     def compute_objectives(self, logits, batch, stage):
         wavs, wav_lens = batch.sig
         phonemes, phoneme_lens = batch.tokens
-        log_probs = self.hparams.log_softmax(logits)
+        log_probs = torch.log_softmax(logits, dim=-1)
 
         # Record phoneme error rate
         if stage != sb.Stage.TRAIN:

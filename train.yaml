@@ -62,11 +62,6 @@ recognizer_output: !new:speechbrain.nnet.linear.Linear
     n_neurons: !ref <output_neurons>
     bias: True
 
-log_softmax: !new:speechbrain.nnet.activations.Softmax
-    apply_log: True
-
-bce_loss: !name:speechbrain.nnet.losses.BCE_loss
-
 modules:
     recognizer: !ref <recognizer>
     recognizer_output: !ref <recognizer_output>
